@@ -43,36 +43,9 @@ class MainWindow : public QMainWindow {
   double time = 0;
   FluidSolver<double> *solver = nullptr;
 
-  uchar *image_data = nullptr;
   void iterate(), show_image(), run();
   void showEvent(QShowEvent *);
 
-  class Worker : public Timer {
-    atomic<bool> running = true, displaying = true, processing;
-    long _lap = 0;
-
-   public:
-    void stop() {
-      displaying = running = false;
-      while (processing) std::this_thread::yield();
-    }
-    void run(std::function<void()> const &lambda) {
-      running = displaying = processing = true;
-      std::thread([=] {
-        while (running) {
-          if (displaying) {
-            start();
-            lambda();
-            _lap = lap();
-          } else
-            std::this_thread::yield();
-        }
-        processing = false;
-      })
-          .detach();
-    }
-    void switch_disp() { displaying = !displaying; }
-    long get_lap() { return _lap; }
-  } worker;
+  Worker worker;
 };
 #endif  // MAINWINDOW_H

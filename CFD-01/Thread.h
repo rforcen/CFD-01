@@ -9,6 +9,7 @@
 #ifndef Thread_h
 #define Thread_h
 
+#include <Timer.h>
 #include <mutex>
 #include <thread>
 
@@ -50,7 +51,7 @@ class Thread {
     for (int t = 0; t < nth; t++) threads[t].join();
   }
 
-  void run_nt( // no thread
+  void run_nt(                                             // no thread
       std::function<void(int, int, int)> const &lambda) {  // t, from, to
     for (int t = 0; t < nth; t++) lambda(t, from(t), to(t));
   }
@@ -162,6 +163,35 @@ class ControlThread {
  private:
   std::thread thrd;
   std::atomic<bool> running = ATOMIC_VAR_INIT(false);
+};
+
+class Worker : public Timer {
+  atomic<bool> running = true, displaying = true, processing;
+  long _lap = 0;
+
+ public:
+  void stop() {
+    displaying = running = false;
+    while (processing) std::this_thread::yield();
+  }
+  void run(std::function<void()> const &lambda) {
+    running = displaying = processing = true;
+
+    std::thread([=] {
+      while (running) {
+        if (displaying) {
+          start();
+          lambda();
+          _lap = lap();
+        } else
+          std::this_thread::yield();
+      }
+      processing = false;
+    })
+        .detach();
+  }
+  void switch_disp() { displaying = !displaying; }
+  long get_lap() { return _lap; }
 };
 
 #endif /* Thread_h */
