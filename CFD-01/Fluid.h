@@ -1,4 +1,25 @@
+/*
+Copyright (c) 2013 Benedikt Bitterli
 
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+   1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+
+   2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+
+   3. This notice may not be removed or altered from any source
+   distribution.
+*/
 #include <math.h>
 #include <stdio.h>
 #include <algorithm>
@@ -32,8 +53,7 @@ class FluidQuantity {
    * This is (0.5,0.5) for centered quantities such as density,
    * and (0.0, 0.5) or (0.5, 0.0) for jittered quantities like the velocity.
    */
-  T _ox;
-  T _oy;
+  T _ox, _oy;
   /* Grid cell size */
   T _hx;
 
@@ -124,6 +144,10 @@ class FluidQuantity {
  */
 template <class T>
 class FluidSolver {
+  const int n_iters = 600;
+  const T eps_error = 1e-5;
+  unsigned char *image_data = nullptr;
+
   /* Fluid quantities density, position, velocity */
   FluidQuantity<T> *_d, *_u, *_v;
 
@@ -196,7 +220,7 @@ class FluidSolver {
           }
         }
 
-        if (maxDelta < 1e-5) break;
+        if (maxDelta < eps_error) break;
       }
     });
   }
@@ -284,6 +308,8 @@ class FluidSolver {
     _p = new T[_w * _h];
 
     memset(_p, 0, size_t(_w * h) * sizeof(T));
+
+    image_data = new unsigned char[w * h * 4];
   }
 
   ~FluidSolver() {
@@ -293,11 +319,13 @@ class FluidSolver {
 
     delete[] _r;
     delete[] _p;
+
+    delete[] image_data;
   }
 
   void update(T timestep) {
     buildRhs();
-    project(600, timestep);
+    project(n_iters, timestep);
     applyPressure(timestep);
 
     _d->advect(timestep, *_u, *_v);
@@ -312,7 +340,7 @@ class FluidSolver {
 
   void update_mt(T timestep) {
     buildRhs();
-    project_mt(600, timestep);
+    project_mt(n_iters, timestep);
     applyPressure(timestep);
 
     _d->advect(timestep, *_u, *_v);
@@ -357,17 +385,17 @@ class FluidSolver {
   }
 
   /* Convert fluid density to RGBA image */
-  unsigned char *toImage(unsigned char *rgba) {
+  unsigned char *toImage() {
     for (int i = 0, c = 0; i < _w * _h; i++) {
       auto shade =
           uint8_t(max<int>(min(int((1.0 - _d->src()[i]) * 255.0), 255), 0));
 
-      rgba[c++] = shade;
-      rgba[c++] = shade;
-      rgba[c++] = shade;
-      rgba[c++] = uint8_t(0xFF);
+      image_data[c++] = shade;
+      image_data[c++] = shade;
+      image_data[c++] = shade;
+      image_data[c++] = uint8_t(0xFF);
     }
-    return rgba;
+    return image_data;
   }
 
   void print_data(void) {
